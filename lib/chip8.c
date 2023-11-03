@@ -40,6 +40,7 @@ struct cpu_state {
     uint16_t sp;
     uint8_t delay_timer;
     uint8_t sound_timer;
+    uint16_t last_input;
 } cpu;
 
 void clear_screen() {
@@ -69,8 +70,8 @@ void execute_opcode(uint16_t opcode) {
     uint8_t nn = opcode & 0xFF;
     uint16_t nnn = opcode & 0xFFF;
 
-    uint8_t x_coord;
-    uint8_t y_coord;
+    unsigned int x_coord;
+    unsigned int y_coord;
 
     switch (high_nibble) {
         case 0x0:
@@ -167,20 +168,16 @@ void execute_opcode(uint16_t opcode) {
             cpu.registers[x] = rand() & nn;
             break;
         case 0xD:
-            x_coord = cpu.registers[x] % CHIP8_SCREEN_WIDTH;
-            y_coord = cpu.registers[y] % CHIP8_SCREEN_HEIGHT;
+            x_coord = cpu.registers[x];
+            y_coord = cpu.registers[y];
             cpu.registers[0xF] = 0;
             for (int i = 0; i < n; i++) {
-                if (y_coord + i >= CHIP8_SCREEN_HEIGHT) {
-                    continue;
-                }
                 uint8_t line = memory[cpu.i + i];
                 for (int j = 0; j < 8; j++) {
-                    if (x_coord + j >= CHIP8_SCREEN_WIDTH) {
-                        continue;
-                    }
                     bool new_value = line & (0x80 >> j);
-                    unsigned int pixel_index = (y_coord + i) * CHIP8_SCREEN_WIDTH + x_coord + j;
+                    x_coord %= CHIP8_SCREEN_WIDTH;
+                    y_coord %= CHIP8_SCREEN_HEIGHT;
+                    unsigned int pixel_index = (y_coord) * CHIP8_SCREEN_WIDTH + x_coord++;
                     if (chip8_output.screen[pixel_index] & new_value) {
                         cpu.registers[0xF] = 1;
                         chip8_output.screen[pixel_index] = false;
@@ -188,17 +185,19 @@ void execute_opcode(uint16_t opcode) {
                         chip8_output.screen[pixel_index] = true;
                     }
                 }
+                y_coord++;
+                x_coord -= 8;
             }
             break;
         case 0xE:
             switch (nn) {
                 case 0x9E:
-                    if (chip8_input.keys[cpu.registers[x] & 0xF]) {
+                    if (chip8_input.keys[cpu.registers[x]]) {
                         cpu.pc += 2;
                     }
                     break;
                 case 0xA1:
-                    if (!chip8_input.keys[cpu.registers[x] & 0xF]) {
+                    if (!chip8_input.keys[cpu.registers[x]]) {
                         cpu.pc += 2;
                     }
                     break;
@@ -223,16 +222,24 @@ void execute_opcode(uint16_t opcode) {
                     }
                     break;
                 case 0x0A:
-                    uint16_t key_state = 0;
-                    for (int i = 0; i < 0x10; i++) {
-                        if (chip8_input.keys[i]) {
-                            key_state = i;
+                    if (cpu.last_input) {
+                        uint16_t current_input = chip8_input.keys[0];
+                        for (int i = 1; i < 0x10; i++) {
+                            current_input <<= 1;
+                            current_input |= chip8_input.keys[i];
+                        }
+                        if (cpu.last_input & ~current_input) {
+                            cpu.registers[x] = cpu.last_input & ~current_input;
+                            cpu.last_input = 0;
+                            break;
                         }
                     }
-                    if (!key_state) {
-                        cpu.pc -= 2;
+                    cpu.last_input = chip8_input.keys[0];
+                    for (int i = 1; i < 0x10; i++) {
+                        cpu.last_input <<= 1;
+                        cpu.last_input |= chip8_input.keys[i];
                     }
-                    cpu.registers[x] = key_state;
+                    cpu.pc -= 2;
                     break;
                 case 0x29:
                     cpu.i = FONT_LOCATION + 5 * (cpu.registers[x] & 0xF);
@@ -244,12 +251,12 @@ void execute_opcode(uint16_t opcode) {
                     break;
                 case 0x55:
                     for (int i = 0; i <= x; i++) {
-                        memory[cpu.i + i] = cpu.registers[i];
+                        memory[cpu.i++] = cpu.registers[i];
                     }
                     break;
                 case 0x65:
                     for (int i = 0; i <= x; i++) {
-                        cpu.registers[i] = memory[cpu.i + i];
+                        cpu.registers[i] = memory[cpu.i++];
                     }
                     break;
             }

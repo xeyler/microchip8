@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "lib/chip8.h"
 
@@ -15,26 +16,25 @@ struct input_map_pair {
 };
 
 struct input_map_pair input_map[] = {
-	{SDLK_1, &chip8_input.keys[0x0]},
-	{SDLK_2, &chip8_input.keys[0x1]},
-	{SDLK_3, &chip8_input.keys[0x2]},
-	{SDLK_4, &chip8_input.keys[0x3]},
+	{SDLK_x, &chip8_input.keys[0x0]},
+	{SDLK_1, &chip8_input.keys[0x1]},
+	{SDLK_2, &chip8_input.keys[0x2]},
+	{SDLK_3, &chip8_input.keys[0x3]},
 	{SDLK_q, &chip8_input.keys[0x4]},
 	{SDLK_w, &chip8_input.keys[0x5]},
 	{SDLK_e, &chip8_input.keys[0x6]},
-	{SDLK_r, &chip8_input.keys[0x7]},
-	{SDLK_a, &chip8_input.keys[0x8]},
-	{SDLK_s, &chip8_input.keys[0x9]},
-	{SDLK_d, &chip8_input.keys[0xA]},
-	{SDLK_f, &chip8_input.keys[0xB]},
-	{SDLK_z, &chip8_input.keys[0xC]},
-	{SDLK_x, &chip8_input.keys[0xD]},
-	{SDLK_c, &chip8_input.keys[0xE]},
+	{SDLK_a, &chip8_input.keys[0x7]},
+	{SDLK_s, &chip8_input.keys[0x8]},
+	{SDLK_d, &chip8_input.keys[0x9]},
+	{SDLK_z, &chip8_input.keys[0xA]},
+	{SDLK_c, &chip8_input.keys[0xB]},
+	{SDLK_4, &chip8_input.keys[0xC]},
+	{SDLK_r, &chip8_input.keys[0xD]},
+	{SDLK_f, &chip8_input.keys[0xE]},
 	{SDLK_v, &chip8_input.keys[0xF]},
 };
 
 void set_input_by_keycode(SDL_Keycode keycode, bool pressed) {
-	printf("%ld\n", sizeof(input_map) / sizeof(struct input_map_pair));
 	for (int i = 0; i < (int) (sizeof(input_map) / sizeof(struct input_map_pair)); i++) {
 		if (keycode == input_map[i].sdl_keycode) {
 			*(input_map[i].chip8_button) = pressed;
@@ -44,6 +44,8 @@ void set_input_by_keycode(SDL_Keycode keycode, bool pressed) {
 }
 
 int main(int argc, char *argv[]) {
+	SDL_AudioDeviceID audio_device;
+	SDL_AudioSpec audio_spec;
 	SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_Surface* surface;
@@ -66,10 +68,19 @@ int main(int argc, char *argv[]) {
 
 	init_emulator(rom_buffer, bytes_read);
 
-    if (SDL_Init(SDL_INIT_EVERYTHING)) {
+    if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init Error: %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
+
+	SDL_zero(audio_spec);
+	audio_spec.freq = 44100;
+	audio_spec.format = AUDIO_S16SYS;
+	audio_spec.channels = 1;
+	audio_spec.samples = 1024;
+	audio_spec.callback = NULL;
+
+	audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_spec, NULL, 0);
 
 	window = SDL_CreateWindow(NULL, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, CHIP8_SCREEN_WIDTH * 10, CHIP8_SCREEN_HEIGHT * 10, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 	if (!window) {
@@ -144,6 +155,17 @@ int main(int argc, char *argv[]) {
 		}
 
 		emulate_one_frame();
+
+		float x = 0;
+		for (int i = 0; i < audio_spec.freq * 3; i++) {
+			x += .010f;
+
+			int16_t sample = sin(x * 4) * 5000;
+			const int sample_size = sizeof(int16_t) * 1;
+			SDL_QueueAudio(audio_device, &sample, sample_size);
+		}
+
+		SDL_PauseAudioDevice(audio_device, !chip8_output.bell);
 
         SDL_RenderClear(renderer);
 		SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
