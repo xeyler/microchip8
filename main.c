@@ -43,6 +43,21 @@ void set_input_by_keycode(SDL_Keycode keycode, bool pressed) {
 	}
 }
 
+float time = 0;
+float bell_frequency = 440;
+
+void audio_buffer_callback(void* userdata, uint8_t* stream, int length) {
+	float* fstream = (float *)stream;
+	length /= sizeof(float) / sizeof(uint8_t);
+	for (int i = 0; i < length; i++) {
+		fstream[i] = 255 * sin(time);
+		time += (bell_frequency * 2 * 3.141592) / 44100;
+		if (time > 2 * 3.141592) {
+			time -= 2 * 3.141592;
+		}
+	}
+}
+
 int main(int argc, char *argv[]) {
 	SDL_AudioDeviceID audio_device;
 	SDL_AudioSpec audio_spec;
@@ -75,10 +90,10 @@ int main(int argc, char *argv[]) {
 
 	SDL_zero(audio_spec);
 	audio_spec.freq = 44100;
-	audio_spec.format = AUDIO_S16SYS;
+	audio_spec.format = AUDIO_F32;
 	audio_spec.channels = 1;
 	audio_spec.samples = 1024;
-	audio_spec.callback = NULL;
+	audio_spec.callback = audio_buffer_callback;
 
 	audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_spec, NULL, 0);
 
@@ -155,15 +170,6 @@ int main(int argc, char *argv[]) {
 		}
 
 		emulate_one_frame();
-
-		float x = 0;
-		for (int i = 0; i < audio_spec.freq * 3; i++) {
-			x += .010f;
-
-			int16_t sample = sin(x * 4) * 5000;
-			const int sample_size = sizeof(int16_t) * 1;
-			SDL_QueueAudio(audio_device, &sample, sample_size);
-		}
 
 		SDL_PauseAudioDevice(audio_device, !chip8_output.bell);
 

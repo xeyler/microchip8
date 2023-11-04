@@ -78,7 +78,9 @@ void execute_opcode(uint16_t opcode) {
             if (opcode == 0x00E0) {
                 clear_screen();
             } else if (opcode == 0x00EE) {
-                cpu.pc = cpu.stack[--cpu.sp];
+                --cpu.sp;
+                cpu.sp %= CHIP8_STACK_SIZE;
+                cpu.pc = cpu.stack[cpu.sp];
             }
             break;
         case 0x1:
@@ -86,6 +88,7 @@ void execute_opcode(uint16_t opcode) {
             break;
         case 0x2:
             cpu.stack[cpu.sp++] = cpu.pc;
+            cpu.sp %= CHIP8_STACK_SIZE;
             cpu.pc = nnn;
             break;
         case 0x3:
@@ -132,7 +135,7 @@ void execute_opcode(uint16_t opcode) {
                     break;
                 case 0x5:
                     cpu.registers[0xF] = 0;
-                    if (cpu.registers[x] > cpu.registers[y]) {
+                    if (cpu.registers[x] >= cpu.registers[y]) {
                         cpu.registers[0xF] = 1;
                     }
                     cpu.registers[x] -= cpu.registers[y];
@@ -144,7 +147,7 @@ void execute_opcode(uint16_t opcode) {
                     break;
                 case 0x7:
                     cpu.registers[0xF] = 0;
-                    if (cpu.registers[y] > cpu.registers[x]) {
+                    if (cpu.registers[y] >= cpu.registers[x]) {
                         cpu.registers[0xF] = 1;
                     }
                     cpu.registers[x] = cpu.registers[y] - cpu.registers[x];
@@ -157,6 +160,13 @@ void execute_opcode(uint16_t opcode) {
             }
             break;
         case 0x9:
+            switch (n) {
+                case 0x0:
+                    if (cpu.registers[x] != cpu.registers[y]) {
+                        cpu.pc += 2;
+                    }
+                    break;
+            }
             break;
         case 0xA:
             cpu.i = nnn;
@@ -168,15 +178,19 @@ void execute_opcode(uint16_t opcode) {
             cpu.registers[x] = rand() & nn;
             break;
         case 0xD:
-            x_coord = cpu.registers[x];
-            y_coord = cpu.registers[y];
+            x_coord = cpu.registers[x] % CHIP8_SCREEN_WIDTH;
+            y_coord = cpu.registers[y] % CHIP8_SCREEN_HEIGHT;
             cpu.registers[0xF] = 0;
             for (int i = 0; i < n; i++) {
+                if (y_coord >= CHIP8_SCREEN_HEIGHT) {
+                    break;
+                }
                 uint8_t line = memory[cpu.i + i];
                 for (int j = 0; j < 8; j++) {
+                    if (x_coord >= CHIP8_SCREEN_WIDTH) {
+                        break;
+                    }
                     bool new_value = line & (0x80 >> j);
-                    x_coord %= CHIP8_SCREEN_WIDTH;
-                    y_coord %= CHIP8_SCREEN_HEIGHT;
                     unsigned int pixel_index = (y_coord) * CHIP8_SCREEN_WIDTH + x_coord++;
                     if (chip8_output.screen[pixel_index] & new_value) {
                         cpu.registers[0xF] = 1;
@@ -192,12 +206,12 @@ void execute_opcode(uint16_t opcode) {
         case 0xE:
             switch (nn) {
                 case 0x9E:
-                    if (chip8_input.keys[cpu.registers[x]]) {
+                    if (chip8_input.keys[cpu.registers[x] & 0xF]) {
                         cpu.pc += 2;
                     }
                     break;
                 case 0xA1:
-                    if (!chip8_input.keys[cpu.registers[x]]) {
+                    if (!chip8_input.keys[cpu.registers[x] & 0xF]) {
                         cpu.pc += 2;
                     }
                     break;
@@ -216,10 +230,6 @@ void execute_opcode(uint16_t opcode) {
                     break;
                 case 0x1E:
                     cpu.i += cpu.registers[x];
-                    cpu.registers[0xF] = 0;
-                    if (cpu.i > 0xFFF) {
-                        cpu.registers[0xF] = 1;
-                    }
                     break;
                 case 0x0A:
                     if (cpu.last_input) {
