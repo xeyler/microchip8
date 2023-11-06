@@ -251,16 +251,19 @@ void execute_opcode(uint16_t opcode) {
                     cpu.i = FONT_LOCATION + 5 * (cpu.registers[x] & 0xF);
                     break;
                 case 0x33:
+                    // TODO: Fix potential segfault
                     memory[cpu.i] = cpu.registers[x] / 100;
                     memory[cpu.i + 1] = (cpu.registers[x] / 10) % 10;
                     memory[cpu.i + 2] = cpu.registers[x] % 10;
                     break;
                 case 0x55:
+                    // TODO: Fix potential segfault
                     for (int i = 0; i <= x; i++) {
                         memory[cpu.i++] = cpu.registers[i];
                     }
                     break;
                 case 0x65:
+                    // TODO: Fix potential segfault
                     for (int i = 0; i <= x; i++) {
                         cpu.registers[i] = memory[cpu.i++];
                     }

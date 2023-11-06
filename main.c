@@ -50,7 +50,7 @@ void audio_buffer_callback(void* userdata, uint8_t* stream, int length) {
 	float* fstream = (float *)stream;
 	length /= sizeof(float) / sizeof(uint8_t);
 	for (int i = 0; i < length; i++) {
-		fstream[i] = 255 * sin(time);
+		fstream[i] = sin(time);
 		time += (bell_frequency * 2 * 3.141592) / 44100;
 		if (time > 2 * 3.141592) {
 			time -= 2 * 3.141592;
@@ -63,6 +63,7 @@ int main(int argc, char *argv[]) {
 	SDL_AudioSpec audio_spec;
 	SDL_Window* window;
     SDL_Renderer* renderer;
+	SDL_Texture* previous_frame;
     SDL_Surface* surface;
     bool running;
 
@@ -119,8 +120,8 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	surface = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, CHIP8_SCREEN_WIDTH, CHIP8_SCREEN_HEIGHT, 1, SDL_PIXELFORMAT_INDEX1MSB);
-	if (!surface) {
+	chip8_frame_surface = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, CHIP8_SCREEN_WIDTH, CHIP8_SCREEN_HEIGHT, 1, SDL_PIXELFORMAT_INDEX1MSB);
+	if (!chip8_frame_surface) {
 		fprintf(stderr, "SDL_CreateRGBSurfaceWithFormat Error: %s\n", SDL_GetError());
 		SDL_DestroyRenderer(renderer);
 		SDL_DestroyWindow(window);
@@ -128,9 +129,19 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 	SDL_Color palette_colors[2] = {{0, 0, 0, 255}, {255, 255, 255, 255}};
-	if (SDL_SetPaletteColors(surface->format->palette, palette_colors, 0, 2)) {
+	if (SDL_SetPaletteColors(chip8_frame_surface->format->palette, palette_colors, 0, 2)) {
 		fprintf(stderr, "SDL_SetPaletteColors Error: %s\n", SDL_GetError());
-		SDL_FreeSurface(surface);
+		SDL_FreeSurface(chip8_frame_surface);
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return EXIT_FAILURE;
+	}
+
+	previous_frame = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, CHIP8_SCREEN_WIDTH, CHIP8_SCREEN_HEIGHT);
+	if (!previous_frame) {
+		fprintf(stderr, "SDL_CreateTexture Error: %s\n", SDL_GetError());
+		SDL_FreeSurface(chip8_frame_surface);
 		SDL_DestroyRenderer(renderer);
 		SDL_DestroyWindow(window);
 		SDL_Quit();
@@ -163,9 +174,9 @@ int main(int argc, char *argv[]) {
 
 		for (int pixel_n = 0; pixel_n < CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT; pixel_n++) {
 			if (chip8_output.screen[pixel_n]) {
-				((uint8_t*) surface->pixels)[pixel_n / 8] |= 1 << (7 - (pixel_n % 8));
+				((uint8_t*) chip8_frame_surface->pixels)[pixel_n / 8] |= 1 << (7 - (pixel_n % 8));
 			} else {
-				((uint8_t*) surface->pixels)[pixel_n / 8] &= ~(1 << (7 - (pixel_n % 8)));
+				((uint8_t*) chip8_frame_surface->pixels)[pixel_n / 8] &= ~(1 << (7 - (pixel_n % 8)));
 			}
 		}
 
@@ -174,16 +185,18 @@ int main(int argc, char *argv[]) {
 		SDL_PauseAudioDevice(audio_device, !chip8_output.bell);
 
         SDL_RenderClear(renderer);
-		SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+		SDL_Texture* chip8_frame_texture = SDL_CreateTextureFromSurface(renderer, chip8_frame_surface);
 		if (!texture) {
 			fprintf(stderr, "SDL_CreateTextureFromSurface Error: %s\n", SDL_GetError());
-			SDL_FreeSurface(surface);
+			SDL_FreeSurface(chip8_frame_surface);
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);
 			SDL_Quit();
 			return EXIT_FAILURE;
 		}
-	    SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+		SDL_SetRenderTarget(renderer, NULL);
+		SDL_RenderCopy(renderer, chip8_frame_texture, NULL, NULL);
 	    SDL_RenderPresent(renderer);
     }
 
