@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
 	SDL_Window* window;
     SDL_Renderer* renderer;
 	SDL_Texture* previous_frame;
-    SDL_Surface* surface;
+    SDL_Surface* chip8_frame_surface;
     bool running;
 
 	if (argc != 2 || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")) {
@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
 
         SDL_RenderClear(renderer);
 		SDL_Texture* chip8_frame_texture = SDL_CreateTextureFromSurface(renderer, chip8_frame_surface);
-		if (!texture) {
+		if (!chip8_frame_texture) {
 			fprintf(stderr, "SDL_CreateTextureFromSurface Error: %s\n", SDL_GetError());
 			SDL_FreeSurface(chip8_frame_surface);
 			SDL_DestroyRenderer(renderer);
@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
 	    SDL_RenderPresent(renderer);
     }
 
-	SDL_FreeSurface(surface);
+	SDL_FreeSurface(chip8_frame_surface);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
